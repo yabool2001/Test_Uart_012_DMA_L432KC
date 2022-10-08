@@ -61,7 +61,7 @@ char             						dbg_buff[MAX_BUFF_SIZE] ;
 uint8_t									tim_on 					= 0 ;
 uint8_t									answer_from_pc		= 0 ;
 const char*								request					= "request request" ;
-const char*         					expected_answer			= "answer answer" ;
+const char*         					expected_answer			= "answer " ;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
