@@ -59,9 +59,11 @@ char             						rx_buff[MAX_BUFF_SIZE] ;
 char             						tx_buff[MAX_BUFF_SIZE] ;
 char             						dbg_buff[MAX_BUFF_SIZE] ;
 uint8_t									tim_on 					= 0 ;
-uint8_t									answer_from_pc		= 0 ;
+uint8_t									answer_from_pc			= 0 ;
+const char*								hello 					= "Hello! Test_Uart_012_L432KC started\n" ;
 const char*								request					= "request request" ;
 const char*         					expected_answer			= "answer " ;
+const char*         					dbg						= "DBG: " ;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -75,6 +77,7 @@ static void MX_RTC_Init(void);
 uint8_t				uart_cc 					( const char* , const char* ) ;
 void 				tim_init 					( void ) ;
 void 				tim_start 					( void ) ;
+void				clean_buff 					( char* ) ;
 void 				green_toggle 				( void ) ;
 HAL_StatusTypeDef 	send_string_2_uart		 	( char* , int ) ;
 HAL_StatusTypeDef 	send_string_2_dbg		 	( char* , int ) ;
@@ -119,13 +122,16 @@ int main(void)
   MX_TIM6_Init();
   MX_RTC_Init();
   /* USER CODE BEGIN 2 */
-
+	send_string_2_dbg ( (char*) hello , strlen ( hello ) ) ;
+	tim_init () ;
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
+	  uart_cc ( request, expected_answer ) ;
+	  HAL_Delay ( 5000 ) ;
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -346,8 +352,7 @@ static void MX_GPIO_Init(void)
 
 /* USER CODE BEGIN 4 */
 
-
-uint8_t swarm_cc ( const char* req , const char* ans )
+uint8_t uart_cc ( const char* req , const char* ans )
 {
 	uint8_t try ;
 	int ldbg ;
@@ -356,33 +361,91 @@ uint8_t swarm_cc ( const char* req , const char* ans )
 
 	for ( try = 0 ; try < 5 ; try++ )
 	{
+		tim_start () ;
 		if ( answer_from_pc == 0 )
 			if ( receive_uart_dma () != HAL_OK )
 			{
-				ldbg = sprintf ( dbg_buff , "try no. %u receive_swarm_uart_dma () != HAL_OK for %s\n" , try , req ) ;
+				ldbg = sprintf ( dbg_buff , "%stry no. %u != HAL_OK for %s\n" , dbg , try , req ) ;
 				send_string_2_dbg ( dbg_buff , ldbg ) ;
 			}
+		send_string_2_uart ( tx_buff , lm ) ;
+		while ( tim_on )
+			if ( answer_from_pc == 2 )
+			{
+				answer_from_pc = 0 ;
+				ldbg = sprintf ( dbg_buff , "\n%stry no. %u answer_from_pc = 1 for %s\n" , dbg , try , req ) ;
+				send_string_2_dbg ( dbg_buff , ldbg ) ;
+				if ( strncmp ( rx_buff , ans , strlen ( ans ) ) == 0 )
+				{
+					send_string_2_uart ( rx_buff , strlen ( rx_buff ) ) ;
+					ldbg = sprintf ( dbg_buff , "%stry no. %u success for %s\n" , dbg , try , req ) ;
+					send_string_2_dbg ( dbg_buff , ldbg ) ;
+					rx_buff[0] = '\0' ;
+					return 1 ;
+				}
+				else
+				{
+					rx_buff[0] = '\0' ;
+					break ;
+				}
+			}
+		clean_buff ( rx_buff ) ;
+	}
+
+	ldbg = sprintf ( dbg_buff , "%s%s %s\n", dbg , (char*) ans , "not received.\n" ) ;
+	send_string_2_dbg ( dbg_buff , ldbg ) ;
+	return 0 ;
+}
+
+/*
+uint8_t uart_cc ( const char* req , const char* ans )
+{
+	uint8_t try ;
+	int ldbg ;
+
+	int lm = sprintf ( tx_buff , "%s" , req ) ;
+
+	for ( try = 0 ; try < 5 ; try++ )
+	{
 		tim_start () ;
+		if ( receive_uart_dma () != HAL_OK )
+		{
+			ldbg = sprintf ( dbg_buff , "%stry no. %u receive_swarm_uart_dma () != HAL_OK for %s" , dbg , try , req ) ;
+			send_string_2_dbg ( dbg_buff , ldbg ) ;
+		}
 		send_string_2_uart ( tx_buff , lm ) ;
 		while ( tim_on )
 			if ( answer_from_pc == 1 )
 			{
-				ldbg = sprintf ( dbg_buff , "try no. %u answer_from_pc = 1 for %s\n" , try , req ) ;
+				ldbg = sprintf ( dbg_buff , "%stry no. %u answer_from_pc = 1 for %s" , dbg , try , req ) ;
 				send_string_2_dbg ( dbg_buff , ldbg ) ;
 				answer_from_pc = 0 ;
 				if ( strncmp ( rx_buff , ans , strlen ( ans ) ) == 0 )
 				{
-					ldbg = sprintf ( dbg_buff , "try no. %u success for %s\n" , try , req ) ;
+					send_string_2_uart ( rx_buff , strlen ( rx_buff ) ) ;
+					ldbg = sprintf ( dbg_buff , "%stry no. %u success for %s" , dbg , try , req ) ;
 					send_string_2_dbg ( dbg_buff , ldbg ) ;
+					rx_buff[0] = '\0' ;
 					return 1 ;
 				}
 				else
+				{
+					rx_buff[0] = '\0' ;
 					break ;
+				}
 			}
 	}
-	ldbg = sprintf ( dbg_buff , "%s %s\n" , (char*) ans , "not received." ) ;
-	send_string_2_dbg ( tx_buff , ldbg ) ;
+
+	ldbg = sprintf ( dbg_buff , "%s%s %s\n", dbg , (char*) ans , "not received." ) ;
+	send_string_2_dbg ( dbg_buff , ldbg ) ;
 	return 0 ;
+}
+*/
+void clean_buff ( char* buff )
+{
+	uint8_t i ;
+	for ( i = 0 ; i < MAX_BUFF_SIZE ; i++ )
+		buff[i] = '\0' ;
 }
 
 void green_toggle ()
@@ -399,6 +462,16 @@ HAL_StatusTypeDef send_string_2_dbg ( char* s , int l )
 	return HAL_UART_Transmit ( UART_HANDLER , (uint8_t *) s , l , UART_TX_TIMEOUT ) ;
 }
 
+
+void tim_init ()
+{
+	__HAL_TIM_CLEAR_IT ( &TIM_HANDLER , TIM_IT_UPDATE ) ;
+}
+void tim_start ()
+{
+	HAL_TIM_Base_Start_IT ( &TIM_HANDLER ) ;
+	tim_on = 1 ;
+}
 void HAL_TIM_PeriodElapsedCallback ( TIM_HandleTypeDef *htim )
 {
 	if ( htim->Instance == TIM_INSTANCE )
@@ -408,10 +481,14 @@ void HAL_TIM_PeriodElapsedCallback ( TIM_HandleTypeDef *htim )
 	}
 }
 
-HAL_StatusTypeDef receive_swarm_uart_dma ()
+HAL_StatusTypeDef receive_uart_dma ()
 {
 	HAL_StatusTypeDef r = HAL_UARTEx_ReceiveToIdle_DMA ( UART_HANDLER , (uint8_t*) rx_buff , MAX_BUFF_SIZE ) ;
-	__HAL_DMA_DISABLE_IT ( &hdma_usart2_rx, DMA_IT_HT ) ; //Disable Half Transfer interrupt.
+	if ( r == HAL_OK )
+	{
+		answer_from_pc = 1 ;
+		__HAL_DMA_DISABLE_IT ( &hdma_usart2_rx, DMA_IT_HT ) ; //Disable Half Transfer interrupt.
+	}
 	return r ;
 }
 
@@ -419,8 +496,8 @@ void HAL_UARTEx_RxEventCallback ( UART_HandleTypeDef *huart , uint16_t Size )
 {
     if ( huart->Instance == UART_INSTANCE )
     {
-    	answer_from_pc = 1 ;
-    	rx_buff[Size] = 0 ;
+    	answer_from_pc = 2 ;
+    	rx_buff[Size] = '\0' ;
     }
 }
 /* USER CODE END 4 */
